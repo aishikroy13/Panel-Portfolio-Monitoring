@@ -4,9 +4,8 @@ import numpy as np
 import altair as alt
 import holoviews as hv
 
-# Enable Panel extensions for Altair and HoloViews
+# Enable Panel extensions
 pn.extension('altair')
-hv.extension('bokeh')
 
 # Load the analyzed data
 df = pd.read_csv("data/analyzed_portfolio.csv")
@@ -82,7 +81,6 @@ sector_filter = pn.widgets.MultiChoice(
 )
 
 # Filter Data based on selections
-@pn.depends(category_filter, sector_filter)
 def filter_data(category, sectors):
     if category == "All":
         filtered = df.copy()
@@ -94,77 +92,86 @@ def filter_data(category, sectors):
     
     return filtered
 
-# Create company selector that updates when filters change
-@pn.depends(filter_data)
+# Create dynamic company options
 def get_company_options(filtered_df):
     if filtered_df.empty:
         return []
     return list(filtered_df["Company"])
 
+# Create company selector
+filtered_df_panel = pn.bind(filter_data, category_filter, sector_filter)
+company_options = pn.bind(get_company_options, filtered_df_panel)
+
 company_selector = pn.widgets.Select(
     name="Select a Company",
-    options=pn.bind(get_company_options, filter_data)
+    options=company_options
 )
 
 # Get company data based on selection
-@pn.depends(filter_data, company_selector)
 def get_company_data(filtered_df, company):
-    if filtered_df.empty or company is None:
-        return None
+    if filtered_df is None or filtered_df.empty or company is None:
+        return pd.Series()
     
     company_data = filtered_df[filtered_df["Company"] == company]
     if company_data.empty:
-        return None
+        return pd.Series()
     
     return company_data.iloc[0]
 
 # Company Details Section
-@pn.depends(get_company_data)
+company_data = pn.bind(get_company_data, filtered_df_panel, company_selector)
+
 def create_company_details(company_data):
-    if company_data is None:
+    if company_data is None or len(company_data) == 0:
         return pn.pane.Markdown("No company selected or no companies match the filters.")
     
-    category_color = colors.get(company_data["Category"], "#FFFFFF")
+    category_color = colors.get(company_data.get("Category", ""), "#FFFFFF")
+    company_name = company_data.get("Company", "")
     
     financial_data = pn.GridBox(
-        pn.pane.Markdown(f"**Revenue:** ${company_data['Revenue']:,.2f}"),
-        pn.pane.Markdown(f"**EBITDA:** ${company_data['EBITDA']:,.2f}"),
-        pn.pane.Markdown(f"**Total Debt:** ${company_data['Total Debt']:,.2f}"),
-        pn.pane.Markdown(f"**Interest Expense:** ${company_data['Interest Expense']:,.2f}"),
-        pn.pane.Markdown(f"**Cash Flow:** ${company_data['Cash Flow from Operations']:,.2f}"),
-        pn.pane.Markdown(f"**Leverage Ratio:** {company_data['Leverage Ratio']:.2f}"),
+        pn.pane.Markdown(f"**Revenue:** ${company_data.get('Revenue', 0):,.2f}"),
+        pn.pane.Markdown(f"**EBITDA:** ${company_data.get('EBITDA', 0):,.2f}"),
+        pn.pane.Markdown(f"**Total Debt:** ${company_data.get('Total Debt', 0):,.2f}"),
+        pn.pane.Markdown(f"**Interest Expense:** ${company_data.get('Interest Expense', 0):,.2f}"),
+        pn.pane.Markdown(f"**Cash Flow:** ${company_data.get('Cash Flow from Operations', 0):,.2f}"),
+        pn.pane.Markdown(f"**Leverage Ratio:** {company_data.get('Leverage Ratio', 0):.2f}"),
         ncols=3
     )
     
     other_metrics = pn.Column(
-        pn.pane.Markdown(f"**Interest Coverage:** {company_data['Interest Coverage']:.2f}"),
-        pn.pane.Markdown(f"**EBITDA Margin:** {company_data['EBITDA Margin']:.2%}"),
-        pn.pane.HTML(f"<p><strong>Category:</strong> <span style='color:{category_color}'>{company_data['Category']}</span></p>"),
-        pn.pane.Markdown(f"**Qualitative Notes:** {qualitative_notes[company_data['Company']]}")
+        pn.pane.Markdown(f"**Interest Coverage:** {company_data.get('Interest Coverage', 0):.2f}"),
+        pn.pane.Markdown(f"**EBITDA Margin:** {company_data.get('EBITDA Margin', 0):.2%}"),
+        pn.pane.HTML(f"<p><strong>Category:</strong> <span style='color:{category_color}'>{company_data.get('Category', '')}</span></p>"),
+        pn.pane.Markdown(f"**Qualitative Notes:** {qualitative_notes.get(company_name, 'No notes available.')}")
     )
     
     export_button = pn.widgets.Button(name="Export Company Data to CSV", button_type="primary")
     
-    @pn.depends(export_button.param.clicks)
-    def export_data(clicks):
-        if clicks:
-            filename = f"data/{company_data['Company']}_export.csv"
-            pd.Series(company_data).to_frame().T.to_csv(filename, index=False)
-            return pn.pane.Alert(f"Exported data for {company_data['Company']} to '{filename}'", alert_type="success")
-        return None
+    def export_data(event):
+        if company_name:
+            filename = f"data/{company_name}_export.csv"
+            try:
+                pd.Series(company_data).to_frame().T.to_csv(filename, index=False)
+                return pn.pane.Alert(f"Exported data for {company_name} to '{filename}'", alert_type="success")
+            except Exception as e:
+                return pn.pane.Alert(f"Error exporting data: {str(e)}", alert_type="danger")
+        return pn.pane.Alert("No company selected", alert_type="warning")
+    
+    export_button.on_click(export_data)
+    
+    export_result = pn.bind(lambda: None)  # Placeholder for export result
     
     return pn.Column(
-        pn.pane.Markdown(f"## {company_data['Company']} Financial Health"),
+        pn.pane.Markdown(f"## {company_name} Financial Health"),
         financial_data,
         other_metrics,
         export_button,
-        export_data
+        export_result
     )
 
 # Scenario Analysis Section
-@pn.depends(get_company_data)
-def create_scenario_widgets(company_data):
-    if company_data is None:
+def create_scenario_analysis(company_data):
+    if company_data is None or len(company_data) == 0:
         return pn.pane.Markdown("Select a company to perform scenario analysis.")
     
     interest_rate_slider = pn.widgets.FloatSlider(
@@ -183,21 +190,25 @@ def create_scenario_widgets(company_data):
         step=1.0
     )
     
-    @pn.depends(interest_rate_slider, revenue_decline_slider)
     def update_scenario(interest_rate_change, revenue_decline):
         # Calculate new interest expense and coverage
-        new_interest_expense = company_data["Interest Expense"] * (1 + interest_rate_change / 100)
-        new_coverage = company_data["EBITDA"] / new_interest_expense if new_interest_expense > 0 else float('inf')
+        interest_expense = company_data.get('Interest Expense', 0)
+        ebitda = company_data.get('EBITDA', 0)
+        total_debt = company_data.get('Total Debt', 0)
+        
+        new_interest_expense = interest_expense * (1 + interest_rate_change / 100)
+        new_coverage = ebitda / new_interest_expense if new_interest_expense > 0 else float('inf')
         
         # Calculate new revenue, EBITDA, and leverage
-        new_revenue = company_data["Revenue"] * (1 - revenue_decline / 100)
-        new_ebitda = company_data["EBITDA"] * (1 - revenue_decline / 100)
-        new_leverage = company_data["Total Debt"] / new_ebitda if new_ebitda != 0 else float('inf')
+        new_ebitda = ebitda * (1 - revenue_decline / 100)
+        new_leverage = total_debt / new_ebitda if new_ebitda != 0 else float('inf')
         
         return pn.Column(
             pn.pane.Markdown(f"New Interest Coverage with {interest_rate_change:.2f}% rate change: {new_coverage:.2f}"),
             pn.pane.Markdown(f"New Leverage Ratio with {revenue_decline:.1f}% revenue decline: {new_leverage:.2f}")
         )
+    
+    scenario_results = pn.bind(update_scenario, interest_rate_slider, revenue_decline_slider)
     
     footnote = pn.pane.Markdown(
         "**Footnote:** The Interest Rate Slider adjusts Interest Expense to simulate market rate changes "
@@ -212,27 +223,31 @@ def create_scenario_widgets(company_data):
         pn.pane.Markdown("Simulate the impact of market changes on portfolio health."),
         interest_rate_slider,
         revenue_decline_slider,
-        update_scenario,
+        scenario_results,
         footnote
     )
 
 # Performance Trends Section
-@pn.depends(get_company_data)
 def create_performance_trends(company_data):
-    if company_data is None:
+    if company_data is None or len(company_data) == 0:
         return pn.pane.Markdown("Select a company to view performance trends.")
     
     years = ["2021", "2022", "2023"]
     
     # Generate trend data for selected company
-    ebitda_value = abs(company_data["EBITDA"])
+    ebitda_value = abs(company_data.get('EBITDA', 0))
+    revenue_value = company_data.get('Revenue', 0)
+    company_name = company_data.get('Company', '')
+    
     ebitda_fluctuation = ebitda_value * 0.1 if ebitda_value > 0 else 1000000
     
+    # Use numpy's random seed to ensure consistent results
+    np.random.seed(42)
     trend_data = pd.DataFrame({
         "Year": years,
-        "Revenue": np.random.normal(company_data["Revenue"], abs(company_data["Revenue"] * 0.1), 3),
-        "EBITDA": np.random.normal(company_data["EBITDA"], ebitda_fluctuation, 3),
-        "Company": [company_data["Company"]] * 3
+        "Revenue": np.random.normal(revenue_value, abs(revenue_value * 0.1), 3),
+        "EBITDA": np.random.normal(company_data.get('EBITDA', 0), ebitda_fluctuation, 3),
+        "Company": [company_name] * 3
     })
     
     revenue_chart = alt.Chart(trend_data).mark_line(color="#00CED1").encode(
@@ -256,27 +271,31 @@ def create_performance_trends(company_data):
     )
     
     # Calculate risk score
-    if company_data["EBITDA"] <= 0:
+    ebitda = company_data.get('EBITDA', 0)
+    ebitda_margin = company_data.get('EBITDA Margin', 0)
+    interest_coverage = company_data.get('Interest Coverage', 0)
+    leverage_ratio = company_data.get('Leverage Ratio', 0)
+    
+    if ebitda <= 0:
         ebitda_factor = 20  # Maximum risk for negative EBITDA
     else:
         # Calculate EBITDA margin component - cap between 0-20
-        margin = company_data["EBITDA Margin"]
-        ebitda_factor = max(0, min(20, 20 * (1 - margin)))
+        ebitda_factor = max(0, min(20, 20 * (1 - ebitda_margin)))
     
     # Handle negative or zero Interest Coverage
-    if company_data["Interest Coverage"] <= 0:
+    if interest_coverage <= 0:
         coverage_factor = 40  # Maximum risk for negative coverage
     else:
         # Calculate coverage component - cap between 0-40
-        coverage = min(company_data["Interest Coverage"], 10)  # Cap at 10x
+        coverage = min(interest_coverage, 10)  # Cap at 10x
         coverage_factor = max(0, min(40, 40 * (1 - coverage/10)))
     
     # Handle negative Leverage Ratio
-    if company_data["Leverage Ratio"] < 0:
+    if leverage_ratio < 0:
         leverage_factor = 20  # Medium risk for negative leverage (could be good or bad)
     else:
         # Calculate leverage component - cap between 0-40
-        leverage = min(company_data["Leverage Ratio"], 8)  # Cap at 8x
+        leverage = min(leverage_ratio, 8)  # Cap at 8x
         leverage_factor = max(0, min(40, 5 * leverage))
     
     # Sum all components to get final score
@@ -300,9 +319,8 @@ metrics_selector = pn.widgets.MultiChoice(
     value=["Leverage Ratio", "Interest Coverage"]
 )
 
-@pn.depends(filter_data, metrics_selector)
 def create_portfolio_comparison(filtered_df, metrics_to_compare):
-    if filtered_df.empty or not metrics_to_compare:
+    if filtered_df is None or filtered_df.empty or not metrics_to_compare:
         return pn.pane.Markdown("No data available for comparison.")
     
     # Format the displayed data for better readability
@@ -323,13 +341,12 @@ def create_portfolio_comparison(filtered_df, metrics_to_compare):
     return pn.widgets.DataFrame(display_df, name="Portfolio Comparison")
 
 # Metric Comparison Visualization
-@pn.depends(filter_data, metrics_selector, company_selector)
 def create_metric_visualization(filtered_df, selected_metrics, company):
-    if filtered_df.empty or not selected_metrics:
+    if filtered_df is None or filtered_df.empty or not selected_metrics:
         return pn.pane.Markdown("No data available for visualization.")
     
     # Filter to selected company if one is chosen
-    if company is not None:
+    if company:
         chart_data = filtered_df[filtered_df["Company"] == company].copy()
     else:
         chart_data = filtered_df.copy()
@@ -418,42 +435,48 @@ def create_metric_visualization(filtered_df, selected_metrics, company):
         pn.pane.Altair(bar_chart)
     )
 
+# Create widgets with proper reactive dependencies
+company_details_pane = pn.bind(create_company_details, company_data)
+scenario_analysis_pane = pn.bind(create_scenario_analysis, company_data)
+performance_trends_pane = pn.bind(create_performance_trends, company_data)
+portfolio_comparison_pane = pn.bind(create_portfolio_comparison, filtered_df_panel, metrics_selector)
+metric_visualization_pane = pn.bind(create_metric_visualization, filtered_df_panel, metrics_selector, company_selector)
+
 # Assemble the Dashboard
-def create_dashboard():
-    # Create tabs for organized viewing
-    tabs = pn.Tabs(
-        ("Overview", pn.Row(
-            pn.Column(
-                create_overview_chart(),
-                pn.pane.Markdown("### Filters"),
-                category_filter,
-                sector_filter
-            )
-        )),
-        ("Company Details", pn.Row(
-            pn.Column(
-                company_selector,
-                create_company_details
-            )
-        )),
-        ("Scenario Analysis", create_scenario_widgets),
-        ("Performance Trends", create_performance_trends),
-        ("Portfolio Comparison", pn.Column(
-            pn.pane.Markdown("## Portfolio Comparison"),
-            metrics_selector,
-            create_portfolio_comparison
-        )),
-        ("Visualizations", create_metric_visualization)
-    )
-    
-    # Main Layout
-    return pn.Column(
-        pn.pane.Markdown("# Private Credit Portfolio Monitoring Dashboard"),
-        pn.pane.Markdown("Interactive dashboard to monitor a hypothetical direct lending portfolio of 9 companies."),
-        tabs
-    )
+overview_pane = create_overview_chart()
+
+# Create tabs for organized viewing
+tabs = pn.Tabs(
+    ("Overview", pn.Row(
+        pn.Column(
+            overview_pane,
+            pn.pane.Markdown("### Filters"),
+            category_filter,
+            sector_filter
+        )
+    )),
+    ("Company Details", pn.Row(
+        pn.Column(
+            company_selector,
+            company_details_pane
+        )
+    )),
+    ("Scenario Analysis", scenario_analysis_pane),
+    ("Performance Trends", performance_trends_pane),
+    ("Portfolio Comparison", pn.Column(
+        pn.pane.Markdown("## Portfolio Comparison"),
+        metrics_selector,
+        portfolio_comparison_pane
+    )),
+    ("Visualizations", metric_visualization_pane)
+)
+
+# Main Layout
+dashboard = pn.Column(
+    pn.pane.Markdown("# Private Credit Portfolio Monitoring Dashboard"),
+    pn.pane.Markdown("Interactive dashboard to monitor a hypothetical direct lending portfolio of 9 companies."),
+    tabs
+)
 
 # Create and serve the dashboard
-dashboard = create_dashboard()
 dashboard.servable()
-
