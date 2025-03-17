@@ -3,9 +3,13 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import holoviews as hv
+import os
+
+import altair as alt
+alt.renderers.enable('default')
 
 # Enable Panel extensions
-pn.extension('altair')
+pn.extension('vega')
 
 # Load the analyzed data
 df = pd.read_csv("data/analyzed_portfolio.csv")
@@ -64,7 +68,7 @@ def create_overview_chart():
         pn.pane.Markdown("Interactive dashboard to monitor a hypothetical direct lending portfolio of 9 companies."),
         pn.pane.Markdown("## Portfolio Overview"),
         pn.pane.Markdown(f"**Total Assets:** {total_assets}"),
-        pn.pane.Altair(bar_chart)
+        pn.pane.Vega(bar_chart)
     )
 
 # Create filter widgets
@@ -148,14 +152,19 @@ def create_company_details(company_data):
     export_button = pn.widgets.Button(name="Export Company Data to CSV", button_type="primary")
     
     def export_data(event):
-        if company_name:
-            filename = f"data/{company_name}_export.csv"
-            try:
-                pd.Series(company_data).to_frame().T.to_csv(filename, index=False)
-                return pn.pane.Alert(f"Exported data for {company_name} to '{filename}'", alert_type="success")
-            except Exception as e:
-                return pn.pane.Alert(f"Error exporting data: {str(e)}", alert_type="danger")
-        return pn.pane.Alert("No company selected", alert_type="warning")
+    if company_name:
+        try:
+            csv_data = pd.Series(company_data).to_frame().T.to_csv(index=False)
+            return pn.pane.HTML(f"""
+            <a href="data:text/csv;charset=utf-8,{csv_data}" 
+               download="{company_name}_export.csv" 
+               class="pn-button bk-btn bk-btn-success">
+               Download {company_name} Data
+            </a>
+            """)
+        except Exception as e:
+            return pn.pane.Alert(f"Error generating data: {str(e)}", alert_type="danger")
+    return pn.pane.Alert("No company selected", alert_type="warning")
     
     export_button.on_click(export_data)
     
@@ -306,8 +315,8 @@ def create_performance_trends(company_data):
     
     return pn.Column(
         pn.pane.Markdown("## Performance Trends"),
-        pn.pane.Altair(revenue_chart),
-        pn.pane.Altair(ebitda_chart),
+        pn.pane.Vega(revenue_chart),
+        pn.pane.Vega(ebitda_chart),
         pn.pane.Markdown("### Risk Score"),
         pn.pane.Markdown(f"Risk Score: {risk_score:.2f} (Lower is better; scale 0-100)")
     )
@@ -432,7 +441,7 @@ def create_metric_visualization(filtered_df, selected_metrics, company):
     return pn.Column(
         pn.pane.Markdown("## Metric Comparison Visualization"),
         pn.pane.Markdown("### Metric Performance by Company"),
-        pn.pane.Altair(bar_chart)
+        pn.pane.Vega(bar_chart)
     )
 
 # Create widgets with proper reactive dependencies
