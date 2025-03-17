@@ -5,11 +5,8 @@ import altair as alt
 import holoviews as hv
 import os
 
-import altair as alt
-alt.renderers.enable('default')
-
-# Enable Panel extensions
-pn.extension('vega')
+# Enable Panel extensions (correcting to use 'altair' instead of 'vega' for Altair compatibility)
+pn.extension('altair')
 
 # Load the analyzed data
 df = pd.read_csv("data/analyzed_portfolio.csv")
@@ -152,19 +149,19 @@ def create_company_details(company_data):
     export_button = pn.widgets.Button(name="Export Company Data to CSV", button_type="primary")
     
     def export_data(event):
-    if company_name:
-        try:
-            csv_data = pd.Series(company_data).to_frame().T.to_csv(index=False)
-            return pn.pane.HTML(f"""
-            <a href="data:text/csv;charset=utf-8,{csv_data}" 
-               download="{company_name}_export.csv" 
-               class="pn-button bk-btn bk-btn-success">
-               Download {company_name} Data
-            </a>
-            """)
-        except Exception as e:
-            return pn.pane.Alert(f"Error generating data: {str(e)}", alert_type="danger")
-    return pn.pane.Alert("No company selected", alert_type="warning")
+        if company_name:
+            try:
+                csv_data = pd.Series(company_data).to_frame().T.to_csv(index=False)
+                return pn.pane.HTML(f"""
+                <a href="data:text/csv;charset=utf-8,{csv_data}" 
+                   download="{company_name}_export.csv" 
+                   class="pn-button bk-btn bk-btn-success">
+                   Download {company_name} Data
+                </a>
+                """)
+            except Exception as e:
+                return pn.pane.Alert(f"Error generating data: {str(e)}", alert_type="danger")
+        return pn.pane.Alert("No company selected", alert_type="warning")
     
     export_button.on_click(export_data)
     
