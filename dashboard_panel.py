@@ -5,8 +5,8 @@ import altair as alt
 import holoviews as hv
 import os
 
-# Enable Panel extensions (correcting to use 'altair' instead of 'vega' for Altair compatibility)
-pn.extension('altair')
+# Enable Panel extensions (use 'vega' for Altair charts rendered with pn.pane.Vega)
+pn.extension('vega')
 
 # Load the analyzed data
 df = pd.read_csv("data/analyzed_portfolio.csv")
@@ -165,14 +165,11 @@ def create_company_details(company_data):
     
     export_button.on_click(export_data)
     
-    export_result = pn.bind(lambda: None)  # Placeholder for export result
-    
     return pn.Column(
         pn.pane.Markdown(f"## {company_name} Financial Health"),
         financial_data,
         other_metrics,
-        export_button,
-        export_result
+        export_button
     )
 
 # Scenario Analysis Section
