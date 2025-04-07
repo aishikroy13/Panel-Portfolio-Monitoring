@@ -376,10 +376,16 @@ def create_metric_visualization(filtered_df, selected_metrics, company):
     chart_height = max(300, len(chart_data) * 50)
     
     bar_chart = alt.Chart(norm_df).mark_bar().encode(
-    x=alt.X("Normalized_Value:Q", title="Normalized Value (0-1)", scale=alt.Scale(domain=[0, 1])),
-    y=alt.Y("Company:N", title="Company"),
-    color=alt.Color("Metric:N", scale=alt.Scale(scheme="category10"), legend=alt.Legend(title="Metrics")),
-    tooltip=["Company", "Metric", "Original_Value:Q", "Normalized_Value:Q"]).properties(width=600,height=chart_height)
+    x=alt.X("Normalized_Value:Q", title="Normalized Value (0-1)"),
+         y=alt.Y("Company:N", title="Company"),
+         color=alt.Color("Metric:N", 
+                        scale=alt.Scale(scheme="category10"),
+                        legend=alt.Legend(title="Metrics")),
+         tooltip=["Company", "Metric", "Original_Value:Q", "Normalized_Value:Q"]
+     ).properties(
+         width=600,
+         height=chart_height
+     )
 
     return pn.Column(
         pn.pane.Markdown("## Metric Comparison Visualization"),
