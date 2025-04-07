@@ -341,7 +341,7 @@ def create_metric_visualization(filtered_df, selected_metrics, company):
                 elif metric == "Interest Coverage":
                     normalized_value = min(max(value, 0), 20) / 20
                 elif metric == "Leverage Ratio":
-                    normalized_value = 1 - (min(max(value, 0), 10) / 10)
+                    normalized_value = min(max(value, 0), 8) / 8
                 elif metric in ["Revenue", "EBITDA"]:
                     all_values = filtered_df[metric].astype(float)
                     min_val, max_val = all_values.min(), all_values.max()
@@ -376,16 +376,10 @@ def create_metric_visualization(filtered_df, selected_metrics, company):
     chart_height = max(300, len(chart_data) * 50)
     
     bar_chart = alt.Chart(norm_df).mark_bar().encode(
-        x=alt.X("Normalized_Value:Q", title="Normalized Value (0-1)"),
-        y=alt.Y("Company:N", title="Company"),
-        color=alt.Color("Metric:N", 
-                       scale=alt.Scale(scheme="category10"),
-                       legend=alt.Legend(title="Metrics")),
-        tooltip=["Company", "Metric", "Original_Value:Q", "Normalized_Value:Q"]
-    ).properties(
-        width=600,
-        height=chart_height
-    )
+    x=alt.X("Normalized_Value:Q", title="Normalized Value (0-1)", scale=alt.Scale(domain=[0, 1])),
+    y=alt.Y("Company:N", title="Company"),
+    color=alt.Color("Metric:N", scale=alt.Scale(scheme="category10"), legend=alt.Legend(title="Metrics")),
+    tooltip=["Company", "Metric", "Original_Value:Q", "Normalized_Value:Q"]).properties(width=600,height=chart_height)
 
     return pn.Column(
         pn.pane.Markdown("## Metric Comparison Visualization"),
