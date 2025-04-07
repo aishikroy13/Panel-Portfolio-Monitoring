@@ -196,6 +196,7 @@ def create_scenario_analysis(company_data):
         
         return pn.Column(
             pn.pane.Markdown(f"New Interest Coverage with {interest_rate_change:.2f}% rate change: {new_coverage:.2f}"),
+            pn.pane.Markdown(warning_message) if warning_message else pn.pane.Markdown(""),
             pn.pane.Markdown(f"New Leverage Ratio with {revenue_decline:.1f}% revenue decline: {new_leverage:.2f}")
         )
     
