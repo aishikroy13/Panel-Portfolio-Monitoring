@@ -189,6 +189,10 @@ def create_scenario_analysis(company_data):
 
         new_ebitda = ebitda * (1 - revenue_decline / 100)
         new_leverage = total_debt / new_ebitda if new_ebitda != 0 else float('inf')
+
+        warning_message = ""
+        if ebitda < 0 and new_coverage < 0:
+            warning_message = "**Warning:** Negative Interest Coverage indicates the company is losing money and cannot cover interest payments. A more negative value means the situation is worsening as interest rates rise."
         
         return pn.Column(
             pn.pane.Markdown(f"New Interest Coverage with {interest_rate_change:.2f}% rate change: {new_coverage:.2f}"),
